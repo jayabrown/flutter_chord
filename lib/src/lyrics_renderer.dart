@@ -124,6 +124,35 @@ class _LyricsRendererState extends State<LyricsRenderer> {
     }
   }
 
+  double getChordWidth(Chord chord) {
+    return chord.leadingSpace +
+        chord.chordText.length * widget.chordStyle.fontSize!;
+  }
+
+  List<ChordLyricsLine> splitChords(ChordLyricsLine line, double maxWidth) {
+    // split chords if they overflow
+    List<ChordLyricsLine> splits = [ChordLyricsLine.line([], '')];
+    double width = 0;
+    for (final chord in line.chords) {
+      // split up chords
+      double chordWidth = getChordWidth(chord);
+      if (width + chordWidth > maxWidth) {
+        splits.add(ChordLyricsLine.line([], ''));
+        width = 0;
+      }
+      splits.last.chords.add(chord);
+      width += chordWidth;
+    }
+    // put lyrics in the first line
+    splits.first.lyrics = line.lyrics;
+
+    // remove empty lines
+    splits.removeWhere((line) => line.chords.isEmpty && line.lyrics.isEmpty);
+    print("splits: $splits");
+
+    return splits;
+  }
+
   @override
   Widget build(BuildContext context) {
     ChordProcessor _chordProcessor =
@@ -168,38 +197,81 @@ class _LyricsRendererState extends State<LyricsRenderer> {
               } else {
                 _isComment = false;
               }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              // width of the screen minus padding
+              double maxWidth =
+                  MediaQuery.of(context).size.width - widget.widgetPadding;
+              // split up chords if they overflow
+              final chordSplits = splitChords(line, maxWidth);
+              // text styles
+              TextStyle lineStyle = getLineTextStyle();
+              TextStyle chordStyle = widget.chordStyle;
+              // padding to move lyrics under chords, when shown
+              double chordSize = widget.showChord && line.chords.isNotEmpty
+                  ? widget.chordStyle.fontSize! * widget.scaleFactor
+                  : 0;
+              // font size of lyrics
+              double lyricsSize =
+                  widget.textStyle.fontSize! * widget.scaleFactor;
+              // line height of overflow lyrics
+              double lyricsHeight = widget.showChord &&
+                      line.chords.isNotEmpty &&
+                      chordSplits.length > 1
+                  ? lineStyle.height! + chordStyle.height! / 1.5
+                  : lineStyle.height ?? 1.0;
+              return Stack(
                 children: [
-                  if (widget.showChord)
-                    Row(
-                      children: line.chords
-                          .map((chord) => Row(
-                                children: [
-                                  SizedBox(
-                                    width: chord.leadingSpace,
-                                  ),
-                                  GestureDetector(
-                                    onTap: () =>
-                                        widget.onTapChord(chord.chordText),
-                                    child: RichText(
-                                      text: TextSpan(
-                                        text: chord.chordText,
-                                        style: widget.chordStyle,
-                                      ),
-                                      textScaler:
-                                          TextScaler.linear(widget.scaleFactor),
-                                    ),
-                                  )
-                                ],
-                              ))
-                          .toList(),
-                    ),
-                  RichText(
-                    text:
-                        TextSpan(text: line.lyrics, style: getLineTextStyle()),
-                    textScaler: TextScaler.linear(widget.scaleFactor),
-                  )
+                  // lyrics
+                  Padding(
+                      padding: EdgeInsets.only(top: chordSize),
+                      child: RichText(
+                        text: TextSpan(
+                            text: line.lyrics,
+                            style: lineStyle.copyWith(
+                              height: line.lyrics.trim().isNotEmpty
+                                  ? lyricsHeight
+                                  : lyricsHeight /
+                                      2, // reduce space proportionally for empty lines
+                            )),
+                        textHeightBehavior: TextHeightBehavior(
+                          // only apply extra height to overflow lines
+                          applyHeightToFirstAscent: line.lyrics
+                              .trim()
+                              .isEmpty, // reduce space for empty lines
+                        ),
+                      )),
+                  widget.showChord
+                      ? Column(children: [
+                          // chords
+                          for (final line in chordSplits)
+                            Padding(
+                              padding: EdgeInsets.only(
+                                  top: 0, bottom: lyricsSize + chordSize),
+                              child: Row(
+                                children: line.chords
+                                    .map((chord) => Row(
+                                          children: [
+                                            SizedBox(
+                                              width: chord.leadingSpace,
+                                            ),
+                                            GestureDetector(
+                                              onTap: () => widget
+                                                  .onTapChord(chord.chordText),
+                                              child: RichText(
+                                                text: TextSpan(
+                                                  text: chord.chordText,
+                                                  style: widget.chordStyle,
+                                                ),
+                                                textScaler: TextScaler.linear(
+                                                    widget.scaleFactor),
+                                              ),
+                                            )
+                                          ],
+                                        ))
+                                    .toList(),
+                              ),
+                            )
+                        ])
+                      : Container(),
                 ],
               );
             },
