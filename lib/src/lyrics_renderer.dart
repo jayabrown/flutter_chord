@@ -98,8 +98,6 @@ class _LyricsRendererState extends State<LyricsRenderer> {
   late TextStyle chorusStyle;
   late TextStyle capoStyle;
   late TextStyle commentStyle;
-  bool _isChorus = false;
-  bool _isComment = false;
 
   @override
   void initState() {
@@ -126,10 +124,10 @@ class _LyricsRendererState extends State<LyricsRenderer> {
     super.dispose();
   }
 
-  TextStyle getLineTextStyle() {
-    if (_isChorus) {
+  TextStyle getLineTextStyle(line) {
+    if (line.lineType == LineType.chorus) {
       return chorusStyle;
-    } else if (_isComment) {
+    } else if (line.lineType == LineType.comment) {
       return commentStyle;
     } else {
       return widget.textStyle;
@@ -169,63 +167,53 @@ class _LyricsRendererState extends State<LyricsRenderer> {
               height: widget.lineHeight,
             ),
             itemBuilder: (context, index) {
-              final dynamic line = chordLyricsDocument.lines[index];
-              if (line is String) {
-                // additional lyrics
-                return RichText(
-                  text: TextSpan(
-                    text: line,
-                    style: widget.additionalTextStyle,
-                  ),
-                  textScaler: TextScaler.linear(widget.scaleFactor),
-                );
-              } else {
-                // chord lyrics line
-                line as ChordLyricsLine;
-              }
-              if (line.isStartOfChorus()) {
-                _isChorus = true;
-              }
-              if (line.isEndOfChorus()) {
-                _isChorus = false;
-              }
-              if (line.isComment()) {
-                _isComment = true;
-              } else {
-                _isComment = false;
-              }
+              final ChordLyricsLine line = chordLyricsDocument.lines[index];
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.showChord)
-                    Row(
-                      children: line.chords
-                          .map((chord) => Row(
-                                children: [
-                                  SizedBox(
-                                    width: chord.leadingSpace,
-                                  ),
-                                  GestureDetector(
-                                    onTap: () =>
-                                        widget.onTapChord(chord.chordText),
-                                    child: RichText(
-                                      text: TextSpan(
-                                        text: chord.chordText,
-                                        style: widget.chordStyle,
+                  widget.showChord
+                      ? Row(
+                          children: line.chords
+                              .map((chord) => Row(
+                                    children: [
+                                      SizedBox(
+                                        width: chord.leadingSpace,
                                       ),
-                                      textScaler:
-                                          TextScaler.linear(widget.scaleFactor),
-                                    ),
-                                  )
-                                ],
-                              ))
-                          .toList(),
-                    ),
-                  RichText(
-                    text:
-                        TextSpan(text: line.lyrics, style: getLineTextStyle()),
-                    textScaler: TextScaler.linear(widget.scaleFactor),
-                  )
+                                      GestureDetector(
+                                        onTap: () =>
+                                            widget.onTapChord(chord.chordText),
+                                        child: RichText(
+                                          text: TextSpan(
+                                            text: chord.chordText,
+                                            style: widget.chordStyle,
+                                          ),
+                                          textScaler: TextScaler.linear(
+                                              widget.scaleFactor),
+                                        ),
+                                      )
+                                    ],
+                                  ))
+                              .toList(),
+                        )
+                      : Container(),
+                  line.lineType != LineType.metadata
+                      ? line.lineType == LineType.extra
+                          ? line.lyrics.isNotEmpty
+                              ? RichText(
+                                  text: TextSpan(
+                                      text: line.lyrics,
+                                      style: widget.additionalTextStyle),
+                                  textScaler:
+                                      TextScaler.linear(widget.scaleFactor),
+                                )
+                              : Container() // skip empty lines in additional lyrics
+                          : RichText(
+                              text: TextSpan(
+                                  text: line.lyrics,
+                                  style: getLineTextStyle(line)),
+                              textScaler: TextScaler.linear(widget.scaleFactor),
+                            )
+                      : Container()
                 ],
               );
             },

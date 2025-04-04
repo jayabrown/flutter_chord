@@ -67,12 +67,22 @@ class ChordProcessor {
     }
 
     List<ChordLyricsLine> _chordLyricsLines = newLines
-        .map<ChordLyricsLine>(
-            (line) => _processLine(line, lyricsStyle, chordStyle, chorusStyle))
+        .map<ChordLyricsLine>((line) => _processLine(
+            line, lyricsStyle, chordStyle, chorusStyle, LineType.main))
         .toList();
 
+    List<List<ChordLyricsLine>>? _additionalLyricsLines = [];
+    if (additionalLines != null) {
+      for (var lineSet in additionalLines) {
+        _additionalLyricsLines.add(lineSet
+            .map<ChordLyricsLine>((line) => _processLine(
+                line, lyricsStyle, chordStyle, chorusStyle, LineType.extra))
+            .toList());
+      }
+    }
+
     return ChordLyricsDocument(_chordLyricsLines,
-        additionalLyrics: additionalLines,
+        additionalLyrics: _additionalLyricsLines,
         capo: metadata.capo,
         artist: metadata.artist,
         title: metadata.title,
@@ -146,8 +156,8 @@ class ChordProcessor {
 
   bool isChorus = false;
   ChordLyricsLine _processLine(String line, TextStyle lyricsStyle,
-      TextStyle chordStyle, TextStyle chorusStyle) {
-    ChordLyricsLine _chordLyricsLine = ChordLyricsLine();
+      TextStyle chordStyle, TextStyle chorusStyle, LineType lineType) {
+    ChordLyricsLine _chordLyricsLine = ChordLyricsLine(lineType: lineType);
     String _lyricsSoFar = '';
     String _chordsSoFar = '';
     bool _chordHasStarted = false;
@@ -155,6 +165,27 @@ class ChordProcessor {
       isChorus = true;
     } else if (line.contains("{eoc}") || line.contains("{end_of_chorus}")) {
       isChorus = false;
+      _chordLyricsLine.lineType = LineType.metadata;
+    }
+    if (line.contains("{sov") || line.contains("{start_of_verse:")) {
+      if (lineType == LineType.extra) {
+        // hide headers in additional lyrics
+        _chordLyricsLine.lineType = LineType.metadata;
+      } else {
+        _chordLyricsLine.lineType = LineType.header;
+      }
+      line = line.replaceAll("{sov", '');
+      line = line.replaceAll("{start_of_verse:", '');
+      line = line.replaceAll('}', '');
+      line = line.trim();
+    } else if (line.contains("{eov") || line.contains("{end_of_verse}")) {
+      line = line.replaceAll("{eov}", '{end_of_verse}');
+      _chordLyricsLine.lineType = LineType.metadata;
+    } else if (line.contains("{comment:")) {
+      line = line.replaceAll("{comment:", '');
+      line = line.replaceAll('}', '');
+      line = line.trim();
+      _chordLyricsLine.lineType = LineType.comment;
     }
     line.split('').forEach((character) {
       if (character == ']') {
@@ -189,6 +220,7 @@ class ChordProcessor {
       }
     });
 
+    if (isChorus) _chordLyricsLine.lineType = LineType.chorus;
     _chordLyricsLine.lyrics += _lyricsSoFar;
 
     return _chordLyricsLine;

@@ -2,14 +2,14 @@ import 'chord_lyrics_line.dart';
 
 class ChordLyricsDocument {
   final List<ChordLyricsLine> _chordLyricsLines;
-  final List<List<String>>? _additionalLyrics;
+  final List<List<ChordLyricsLine>>? _additionalLyrics;
   final int? capo;
   final String? title;
   final String? artist;
   final String? key;
 
   ChordLyricsDocument(this._chordLyricsLines,
-      {List<List<String>>? additionalLyrics,
+      {List<List<ChordLyricsLine>>? additionalLyrics,
       this.capo,
       this.title,
       this.artist,
@@ -33,10 +33,9 @@ class ChordLyricsDocument {
   }
 
   /// iterate over lyrics and additional lyrics
-  List<dynamic> get lines {
-    // type is either ChordLyricsLine or String
+  List<ChordLyricsLine> get lines {
     // insert additional lyrics
-    List<dynamic> zippedLines = [];
+    List<ChordLyricsLine> zippedLines = [];
     for (int i = 0; i < _chordLyricsLines.length; i++) {
       zippedLines.add(_chordLyricsLines[i]);
       for (int j = 0; j < _lyricsSetCount; j++) {
