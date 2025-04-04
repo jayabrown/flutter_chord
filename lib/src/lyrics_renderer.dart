@@ -10,6 +10,12 @@ class LyricsRenderer extends StatefulWidget {
   final bool showChord;
   final Function onTapChord;
 
+  /// Additional lyrics that will be displayed under the main lyrics
+  final List<String>? additionalLyrics;
+
+  /// Text style used for additional lyrics
+  final TextStyle? additionalTextStyle;
+
   /// To help stop overflow, this should be the sum of left & right padding
   final int widgetPadding;
 
@@ -60,7 +66,9 @@ class LyricsRenderer extends StatefulWidget {
   const LyricsRenderer(
       {Key? key,
       required this.lyrics,
+      this.additionalLyrics,
       required this.textStyle,
+      this.additionalTextStyle,
       required this.chordStyle,
       required this.onTapChord,
       this.chorusStyle,
@@ -134,6 +142,7 @@ class _LyricsRendererState extends State<LyricsRenderer> {
         ChordProcessor(context, widget.chordNotation);
     final chordLyricsDocument = _chordProcessor.processText(
       text: widget.lyrics,
+      additionalLyrics: widget.additionalLyrics,
       lyricsStyle: widget.textStyle,
       chordStyle: widget.chordStyle,
       chorusStyle: chorusStyle,
@@ -142,7 +151,7 @@ class _LyricsRendererState extends State<LyricsRenderer> {
       transposeIncrement: widget.transposeIncrement,
       breakingCharacters: widget.breakingCharacters,
     );
-    if (chordLyricsDocument.chordLyricsLines.isEmpty) return Container();
+    if (chordLyricsDocument.lines.isEmpty) return Container();
     return SingleChildScrollView(
       controller: _controller,
       physics: widget.scrollPhysics,
@@ -160,8 +169,20 @@ class _LyricsRendererState extends State<LyricsRenderer> {
               height: widget.lineHeight,
             ),
             itemBuilder: (context, index) {
-              final ChordLyricsLine line =
-                  chordLyricsDocument.chordLyricsLines[index];
+              final dynamic line = chordLyricsDocument.lines[index];
+              if (line is String) {
+                // additional lyrics
+                return RichText(
+                  text: TextSpan(
+                    text: line,
+                    style: widget.additionalTextStyle,
+                  ),
+                  textScaler: TextScaler.linear(widget.scaleFactor),
+                );
+              } else {
+                // chord lyrics line
+                line as ChordLyricsLine;
+              }
               if (line.isStartOfChorus()) {
                 _isChorus = true;
               }
@@ -208,7 +229,7 @@ class _LyricsRendererState extends State<LyricsRenderer> {
                 ],
               );
             },
-            itemCount: chordLyricsDocument.chordLyricsLines.length,
+            itemCount: chordLyricsDocument.lines.length,
           ),
           if (widget.trailingWidget != null) widget.trailingWidget!,
         ],

@@ -19,6 +19,7 @@ class ChordProcessor {
   /// Process the text to get the parsed ChordLyricsDocument
   ChordLyricsDocument processText({
     required String text,
+    List<String>? additionalLyrics,
     required TextStyle lyricsStyle,
     required TextStyle chordStyle,
     required TextStyle chorusStyle,
@@ -28,6 +29,12 @@ class ChordProcessor {
     required List<String> breakingCharacters,
   }) {
     final List<String> lines = text.split('\n');
+    List<List<String>>? additionalLines = additionalLyrics?.map((text) {
+      // split into lines and remove chords
+      text = removeChords(text);
+      return text.split('\n');
+    }).toList();
+
     final MetadataHandler metadata = MetadataHandler();
     _textScaleFactor = TextScaler.linear(scaleFactor);
     chordTransposer.transpose = transposeIncrement;
@@ -65,6 +72,7 @@ class ChordProcessor {
         .toList();
 
     return ChordLyricsDocument(_chordLyricsLines,
+        additionalLyrics: additionalLines,
         capo: metadata.capo,
         artist: metadata.artist,
         title: metadata.title,
@@ -116,6 +124,12 @@ class ChordProcessor {
     //add the rest of the long line
     newLines
         .add(currentLine.substring(_characterIndex, currentLine.length).trim());
+  }
+
+  String removeChords(String line) {
+    return line.replaceAllMapped(RegExp(r'\[.*?\]'), (match) {
+      return '';
+    });
   }
 
   /// Return the textwidth of the text in the given style
