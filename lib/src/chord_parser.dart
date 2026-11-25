@@ -29,7 +29,7 @@ class ChordProcessor {
     required List<String> breakingCharacters,
   }) {
     final List<String> lines = text.split('\n');
-    List<List<String>>? additionalLines = additionalLyrics?.map((text) {
+    List<List<String>>? additionalSourceLines = additionalLyrics?.map((text) {
       // split into lines and remove chords
       text = removeChords(text);
       return text.split('\n');
@@ -43,9 +43,16 @@ class ChordProcessor {
     final List<String> newLines = <String>[];
     String currentLine = '';
 
+    /// For each entry in [newLines], the index of the source line it came
+    /// from. A long line can produce several entries and a metadata line
+    /// produces none, so this keeps additional lyrics aligned with their
+    /// source line.
+    final List<int> sourceIndexes = <int>[];
+
     ///loop through the lines
     for (int i = 0; i < lines.length; i++) {
       currentLine = lines[i];
+      final int linesBefore = newLines.length;
 
       ///If it finds some metadata skip to the next line
       if (metadata.parseLine(currentLine)) {
@@ -64,7 +71,27 @@ class ChordProcessor {
         //otherwise just add the regular line
         newLines.add(currentLine.trim());
       }
+      for (int k = linesBefore; k < newLines.length; k++) {
+        sourceIndexes.add(i);
+      }
     }
+
+    // Place each additional line after the last segment of its source line.
+    // Earlier segments of a wrapped line get null, which is not rendered.
+    final List<List<String?>>? additionalLines =
+        additionalSourceLines?.map<List<String?>>((set) {
+      final aligned = List<String?>.generate(newLines.length, (k) {
+        final src = sourceIndexes[k];
+        final isLastSegment =
+            k == newLines.length - 1 || sourceIndexes[k + 1] != src;
+        return isLastSegment && src < set.length ? set[src] : null;
+      });
+      // Keep any additional lines that have no matching source line.
+      if (set.length > lines.length) {
+        aligned.addAll(set.sublist(lines.length));
+      }
+      return aligned;
+    }).toList();
 
     List<ChordLyricsLine> _chordLyricsLines = newLines
         .map<ChordLyricsLine>(

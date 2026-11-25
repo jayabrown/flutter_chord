@@ -2,19 +2,23 @@ import 'chord_lyrics_line.dart';
 
 class ChordLyricsDocument {
   final List<ChordLyricsLine> _chordLyricsLines;
-  final List<List<String>>? _additionalLyrics;
+  final List<List<String?>>? _additionalLyrics;
   final int? capo;
   final String? title;
   final String? artist;
   final String? key;
 
   ChordLyricsDocument(this._chordLyricsLines,
-      {List<List<String>>? additionalLyrics,
+      {List<List<String?>>? additionalLyrics,
       this.capo,
       this.title,
       this.artist,
       this.key})
       : _additionalLyrics = additionalLyrics;
+
+  /// The chord and lyrics lines, after long lines have been split.
+  List<ChordLyricsLine> get chordLyricsLines =>
+      List.unmodifiable(_chordLyricsLines);
 
   /// count of how many additional sets of lyrics there are
   int get _lyricsSetCount => _additionalLyrics?.length ?? 0;
@@ -37,12 +41,17 @@ class ChordLyricsDocument {
     // type is either ChordLyricsLine or String
     // insert additional lyrics
     List<dynamic> zippedLines = [];
+    void addAdditional(String? line) {
+      // skip alignment padding (null) and blank additional lines
+      if (line != null && line.trim().isNotEmpty) zippedLines.add(line);
+    }
+
     for (int i = 0; i < _chordLyricsLines.length; i++) {
       zippedLines.add(_chordLyricsLines[i]);
       for (int j = 0; j < _lyricsSetCount; j++) {
         // prevent going beyond the length of the additional lyrics
         if (i < _additionalLyrics![j].length) {
-          zippedLines.add(_additionalLyrics![j][i]);
+          addAdditional(_additionalLyrics![j][i]);
         }
       }
     }
@@ -50,7 +59,7 @@ class ChordLyricsDocument {
     for (int i = _chordLyricsLines.length; i < _longestLength; i++) {
       for (int j = 0; j < _lyricsSetCount; j++) {
         if (i < _additionalLyrics![j].length) {
-          zippedLines.add(_additionalLyrics![j][i]);
+          addAdditional(_additionalLyrics![j][i]);
         }
       }
     }
