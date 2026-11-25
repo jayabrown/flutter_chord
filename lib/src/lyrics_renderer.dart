@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -10,7 +11,16 @@ import 'song_layout.dart';
 /// optional linear auto-scroll.
 class LyricsRenderer extends StatefulWidget {
   final String lyrics;
+
+  /// Other texts with the same line structure as [lyrics], such as
+  /// translations. Each line is shown under the matching line of [lyrics],
+  /// after all of its wrapped rows. See [parseSong].
+  final List<String> additionalLyrics;
+
   final TextStyle textStyle;
+
+  /// Style of [additionalLyrics]. Defaults to [textStyle].
+  final TextStyle? additionalTextStyle;
   final TextStyle chordStyle;
   final bool showChord;
   final void Function(String chord) onTapChord;
@@ -65,7 +75,9 @@ class LyricsRenderer extends StatefulWidget {
   const LyricsRenderer({
     super.key,
     required this.lyrics,
+    this.additionalLyrics = const [],
     required this.textStyle,
+    this.additionalTextStyle,
     required this.chordStyle,
     required this.onTapChord,
     this.chorusStyle,
@@ -94,6 +106,7 @@ class _LyricsRendererState extends State<LyricsRenderer> {
   late final ScrollController _controller;
 
   String? _parsedLyrics;
+  List<String> _parsedAdditional = const [];
   late SongDocument _document;
 
   Object? _layoutKey;
@@ -123,13 +136,19 @@ class _LyricsRendererState extends State<LyricsRenderer> {
         chords: widget.chordStyle,
         chorus: widget.chorusStyle,
         comment: widget.commentStyle,
+        additional: widget.additionalTextStyle,
         textScaler: TextScaler.linear(widget.scaleFactor),
       );
 
   SongLayout _layoutFor(double maxWidth) {
-    if (_parsedLyrics != widget.lyrics) {
-      _document = parseSong(widget.lyrics);
+    if (_parsedLyrics != widget.lyrics ||
+        !listEquals(_parsedAdditional, widget.additionalLyrics)) {
+      _document = parseSong(
+        widget.lyrics,
+        additionalLyrics: widget.additionalLyrics,
+      );
       _parsedLyrics = widget.lyrics;
+      _parsedAdditional = List.of(widget.additionalLyrics);
     }
     final style = _style;
     final key = Object.hash(

@@ -189,4 +189,103 @@ void main() {
       );
     });
   });
+  group('additional lyrics', () {
+    const additionalStyle = TextStyle(fontSize: 6);
+    final withAdditional = LyricsStyle(
+      lyrics: _lyrics,
+      chords: _chords,
+      additional: additionalStyle,
+    );
+
+    test('follow all wrapped rows of their line', () {
+      final song = parseSong(
+        '[C]aaa [G]bbb [D]ccc\n[Am]ddd',
+        additionalLyrics: ['one\ntwo', 'uno\ndos'],
+      );
+      final rows = layoutSong(
+        song,
+        style: withAdditional,
+        maxWidth: 70,
+      ).rows.toList();
+      expect(rows.map((r) => r.lyrics), [
+        'aaa bbb',
+        'ccc',
+        'one',
+        'uno',
+        'ddd',
+        'two',
+        'dos',
+      ]);
+      expect(rows.map((r) => r.isAdditional), [
+        false,
+        false,
+        true,
+        true,
+        false,
+        true,
+        true,
+      ]);
+    });
+
+    test('use the additional style and have no chords', () {
+      final rows = layoutLine(
+        parseSong('[C]abc', additionalLyrics: ['xyz']).lines.single,
+        style: withAdditional,
+        maxWidth: 1000,
+      );
+      final extra = rows.last;
+      expect(extra.lyricStyle, additionalStyle);
+      expect(extra.chords, isEmpty);
+      expect(extra.chordRowHeight, 0);
+      expect(extra.lyricWidth, 18);
+      expect(extra.height, 6);
+    });
+
+    test('default to the lyrics style', () {
+      final rows = layoutLine(
+        parseSong('abc', additionalLyrics: ['xyz']).lines.single,
+        style: style,
+        maxWidth: 1000,
+      );
+      expect(rows.last.lyricStyle, _lyrics);
+    });
+
+    test('wrap to the width, at breaking characters too', () {
+      final rows = layoutLine(
+        parseSong('ab', additionalLyrics: ['aa-bb-cc']).lines.single,
+        style: style,
+        maxWidth: 50,
+        breakingCharacters: ['-'],
+      );
+      expect(rows.map((r) => r.lyrics), ['ab', 'aa-', 'bb-cc']);
+    });
+
+    test('skip empty additional lines', () {
+      final rows = layoutLine(
+        parseSong('ab\ncd', additionalLyrics: ['\nxy']).lines.first,
+        style: style,
+        maxWidth: 1000,
+      );
+      expect(rows.map((r) => r.lyrics), ['ab']);
+    });
+
+    test('past the end of the lyrics lay out without a lyric row', () {
+      final layout = layoutSong(
+        parseSong('ab', additionalLyrics: ['one\ntwo']),
+        style: style,
+        maxWidth: 1000,
+      );
+      expect(layout.stanzas.last.rows.map((r) => r.lyrics), ['two']);
+    });
+
+    test('count towards the stanza height', () {
+      final layout = layoutSong(
+        parseSong('a', additionalLyrics: ['b']),
+        style: withAdditional,
+        maxWidth: 1000,
+        rowSpacing: 4,
+      );
+      expect(layout.stanzas.single.height, 10 + 4 + 6);
+    });
+  });
 }

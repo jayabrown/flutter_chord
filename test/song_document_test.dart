@@ -94,4 +94,70 @@ void main() {
       expect(song.chordNames, ['C', 'G', 'Am']);
     });
   });
+  group('parseSong additional lyrics', () {
+    List<List<String>> additionalOf(SongDocument song) =>
+        [for (final line in song.lines) line.additional];
+
+    test('attaches each additional line to the same source line', () {
+      final song = parseSong(
+        '[C]one\n[G]two\n\n[Am]three',
+        additionalLyrics: ['uno\ndos\n\ntres', '1\n2\n\n3'],
+      );
+      expect(additionalOf(song), [
+        ['uno', '1'],
+        ['dos', '2'],
+        ['tres', '3'],
+      ]);
+    });
+
+    test('removes chord markup from additional lines', () {
+      final song = parseSong('one', additionalLyrics: ['[C]u[G]no ']);
+      expect(song.lines.single.additional, ['uno']);
+    });
+
+    test('skips additional lines next to metadata and blank lines', () {
+      final song = parseSong(
+        '{title: T}\none\n\ntwo',
+        additionalLyrics: ['x\nuno\ny\ndos'],
+      );
+      expect(additionalOf(song), [
+        ['uno'],
+        ['dos'],
+      ]);
+    });
+
+    test('attaches additional lines to comments and chorus lines', () {
+      final song = parseSong(
+        '{c: Slowly}\n{soc}\n[C]sing\n{eoc}',
+        additionalLyrics: ['Despacio\n\ncanta\n'],
+      );
+      expect(additionalOf(song), [
+        ['Despacio'],
+        ['canta'],
+      ]);
+      expect(song.lines.last.isChorus, isTrue);
+    });
+
+    test('uses an empty string where a set is shorter', () {
+      final song = parseSong('one\ntwo', additionalLyrics: ['uno']);
+      expect(additionalOf(song), [
+        ['uno'],
+        [''],
+      ]);
+    });
+
+    test('keeps lines past the end of the lyrics in a final stanza', () {
+      final song = parseSong('one', additionalLyrics: ['uno\ndos\n\ntres']);
+      expect(song.stanzas.length, 2);
+      expect(song.stanzas.last.lines.map((l) => l.lyrics), ['', '']);
+      expect(additionalOf(song).skip(1), [
+        ['dos'],
+        ['tres'],
+      ]);
+    });
+
+    test('leaves lines without additional lyrics unchanged', () {
+      expect(parseSong('one').lines.single.additional, isEmpty);
+    });
+  });
 }

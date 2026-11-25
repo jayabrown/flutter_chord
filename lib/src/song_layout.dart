@@ -11,6 +11,9 @@ class LyricsStyle {
   final TextStyle chords;
   final TextStyle chorus;
   final TextStyle comment;
+
+  /// Style of additional lines (see [LyricLine.additional]).
+  final TextStyle additional;
   final TextScaler textScaler;
 
   LyricsStyle({
@@ -18,8 +21,10 @@ class LyricsStyle {
     required this.chords,
     TextStyle? chorus,
     TextStyle? comment,
+    TextStyle? additional,
     this.textScaler = TextScaler.noScaling,
-  })  : chorus = chorus ?? lyrics.copyWith(fontWeight: FontWeight.bold),
+  })  : additional = additional ?? lyrics,
+        chorus = chorus ?? lyrics.copyWith(fontWeight: FontWeight.bold),
         comment = comment ??
             lyrics.copyWith(
               fontStyle: FontStyle.italic,
@@ -38,10 +43,12 @@ class LyricsStyle {
       other.chords == chords &&
       other.chorus == chorus &&
       other.comment == comment &&
+      other.additional == additional &&
       other.textScaler == textScaler;
 
   @override
-  int get hashCode => Object.hash(lyrics, chords, chorus, comment, textScaler);
+  int get hashCode =>
+      Object.hash(lyrics, chords, chorus, comment, additional, textScaler);
 }
 
 /// Measures [text] on a single line.
@@ -94,6 +101,10 @@ class LaidOutRow {
   /// Zero when the row shows no chords.
   final double chordRowHeight;
 
+  /// A row of an additional line (see [LyricLine.additional]) rather than
+  /// of the lyrics themselves.
+  final bool isAdditional;
+
   const LaidOutRow({
     required this.lyrics,
     required this.lyricStyle,
@@ -101,6 +112,7 @@ class LaidOutRow {
     required this.lyricWidth,
     required this.lyricHeight,
     required this.chordRowHeight,
+    this.isAdditional = false,
   });
 
   double get height => chordRowHeight + lyricHeight;
@@ -186,6 +198,9 @@ SongLayout layoutSong(
 /// pushes a row past [maxWidth], the line is re-wrapped narrower so the
 /// last word moves down with its chord.
 ///
+/// Additional lines are wrapped to [maxWidth] too and follow the line's
+/// last row.
+///
 /// See [wrapText] for [breakingCharacters].
 List<LaidOutRow> layoutLine(
   LyricLine line, {
@@ -195,6 +210,16 @@ List<LaidOutRow> layoutLine(
   bool showChords = true,
   List<String> breakingCharacters = const [],
 }) {
+  final additionalRows = [
+    for (final text in line.additional)
+      if (text.isNotEmpty)
+        ..._additionalRows(text, style, maxWidth, breakingCharacters),
+  ];
+  // Only additional lines here (they ran past the end of the lyrics).
+  if (line.lyrics.isEmpty && !line.hasChords && additionalRows.isNotEmpty) {
+    return additionalRows;
+  }
+
   var wrapWidth = maxWidth;
   List<LaidOutRow> layout() => _layoutRows(
       line, style, wrapWidth, transposer, showChords, breakingCharacters);
@@ -208,7 +233,35 @@ List<LaidOutRow> layoutLine(
     wrapWidth -= overhang;
     rows = layout();
   }
-  return rows;
+  return [...rows, ...additionalRows];
+}
+
+List<LaidOutRow> _additionalRows(
+  String text,
+  LyricsStyle style,
+  double maxWidth,
+  List<String> breakingCharacters,
+) {
+  final scaler = style.textScaler;
+  final segments =
+      wrapText(text, style.additional, maxWidth, scaler, breakingCharacters);
+  return [
+    for (final segment in segments) _additionalRow(segment.text, style),
+  ];
+}
+
+LaidOutRow _additionalRow(String text, LyricsStyle style) {
+  final size =
+      measureText(text, style.additional, textScaler: style.textScaler);
+  return LaidOutRow(
+    lyrics: text,
+    lyricStyle: style.additional,
+    chords: const [],
+    lyricWidth: size.width,
+    lyricHeight: size.height,
+    chordRowHeight: 0,
+    isAdditional: true,
+  );
 }
 
 List<LaidOutRow> _layoutRows(
