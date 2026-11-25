@@ -58,6 +58,10 @@ class LyricsRenderer extends StatefulWidget {
   /// settles, so a parent can restore the reading position elsewhere.
   final ValueChanged<int>? onStanzaChanged;
 
+  /// Extra characters a long line may break after, besides whitespace.
+  /// See [wrapText].
+  final List<String> breakingCharacters;
+
   const LyricsRenderer({
     super.key,
     required this.lyrics,
@@ -79,6 +83,7 @@ class LyricsRenderer extends StatefulWidget {
     this.scrollController,
     this.initialStanza = 0,
     this.onStanzaChanged,
+    this.breakingCharacters = const [],
   });
 
   @override
@@ -135,6 +140,7 @@ class _LyricsRendererState extends State<LyricsRenderer> {
       widget.chordNotation,
       widget.showChord,
       widget.lineHeight,
+      Object.hashAll(widget.breakingCharacters),
     );
     if (key != _layoutKey) {
       _layout = layoutSong(
@@ -145,6 +151,7 @@ class _LyricsRendererState extends State<LyricsRenderer> {
         notation: widget.chordNotation,
         showChords: widget.showChord,
         rowSpacing: widget.lineHeight,
+        breakingCharacters: widget.breakingCharacters,
       );
       final isReflow = _layoutKey != null;
       _layoutKey = key;

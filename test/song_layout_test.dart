@@ -31,6 +31,62 @@ void main() {
     test('ignores trailing whitespace when checking the fit', () {
       expect(wrapText('abcde ', _lyrics, 50).length, 1);
     });
+
+    test('breaks after a breaking character and keeps it on the row', () {
+      final segments = wrapText(
+        'aa-bb-cc',
+        _lyrics,
+        50,
+        TextScaler.noScaling,
+        ['-'],
+      );
+      expect(segments.map((s) => s.text), ['aa-', 'bb-cc']);
+      expect(segments.map((s) => s.start), [0, 3]);
+    });
+
+    test('without breaking characters splits the word between characters', () {
+      expect(
+        wrapText('aa-bb-cc', _lyrics, 50).map((s) => s.text),
+        ['aa-bb', '-cc'],
+      );
+    });
+
+    test('still breaks at whitespace with breaking characters', () {
+      final segments = wrapText(
+        'aa bb/cc',
+        _lyrics,
+        50,
+        TextScaler.noScaling,
+        ['/'],
+      );
+      expect(segments.map((s) => s.text), ['aa', 'bb/cc']);
+      expect(segments.map((s) => s.start), [0, 3]);
+    });
+
+    test('keeps a run of breaking characters together', () {
+      final segments = wrapText(
+        'aa--bb--cc',
+        _lyrics,
+        60,
+        TextScaler.noScaling,
+        ['-'],
+      );
+      expect(segments.map((s) => s.text), ['aa--', 'bb--cc']);
+    });
+
+    test('treats regex characters in breaking characters literally', () {
+      expect(
+        wrapText('aa.bb.cc', _lyrics, 50, TextScaler.noScaling, ['.'])
+            .map((s) => s.text),
+        ['aa.', 'bb.cc'],
+      );
+      // An unescaped '.' would match every character and pack 'ab cd'.
+      expect(
+        wrapText('ab cdefgh', _lyrics, 50, TextScaler.noScaling, ['.'])
+            .map((s) => s.text),
+        ['ab', 'cdefg', 'h'],
+      );
+    });
   });
 
   group('layoutLine', () {
@@ -73,6 +129,18 @@ void main() {
         'G@40.0',
       ]);
       expect(rows.last.chords.map((c) => '${c.name}@${c.x}'), ['D@0.0']);
+    });
+
+    test('moves chords with their syllables at breaking characters', () {
+      final rows = layoutLine(
+        parseLine('[C]aa-bb-[G]cc'),
+        style: style,
+        maxWidth: 50,
+        breakingCharacters: ['-'],
+      );
+      expect(rows.map((r) => r.lyrics), ['aa-', 'bb-cc']);
+      expect(rows.first.chords.map((c) => '${c.name}@${c.x}'), ['C@0.0']);
+      expect(rows.last.chords.map((c) => '${c.name}@${c.x}'), ['G@30.0']);
     });
 
     test('transposes chord names', () {

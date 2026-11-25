@@ -150,6 +150,7 @@ SongLayout layoutSong(
   ChordNotation notation = ChordNotation.american,
   bool showChords = true,
   double rowSpacing = 0,
+  List<String> breakingCharacters = const [],
 }) {
   final transposer = ChordTransposer(notation, transpose: transpose);
   final stanzas = [
@@ -163,6 +164,7 @@ SongLayout layoutSong(
               maxWidth: maxWidth,
               transposer: transposer,
               showChords: showChords,
+              breakingCharacters: breakingCharacters,
             ),
         ],
         rowSpacing: rowSpacing,
@@ -183,15 +185,20 @@ SongLayout layoutSong(
 /// A chord after the last syllable can hang past the lyrics. When that
 /// pushes a row past [maxWidth], the line is re-wrapped narrower so the
 /// last word moves down with its chord.
+///
+/// See [wrapText] for [breakingCharacters].
 List<LaidOutRow> layoutLine(
   LyricLine line, {
   required LyricsStyle style,
   required double maxWidth,
   ChordTransposer? transposer,
   bool showChords = true,
+  List<String> breakingCharacters = const [],
 }) {
   var wrapWidth = maxWidth;
-  var rows = _layoutRows(line, style, wrapWidth, transposer, showChords);
+  List<LaidOutRow> layout() => _layoutRows(
+      line, style, wrapWidth, transposer, showChords, breakingCharacters);
+  var rows = layout();
   for (var attempt = 0; attempt < 3; attempt++) {
     final overhang = rows.fold<double>(
       0,
@@ -199,7 +206,7 @@ List<LaidOutRow> layoutLine(
     );
     if (overhang <= 0.5 || wrapWidth - overhang < maxWidth / 2) break;
     wrapWidth -= overhang;
-    rows = _layoutRows(line, style, wrapWidth, transposer, showChords);
+    rows = layout();
   }
   return rows;
 }
@@ -210,10 +217,17 @@ List<LaidOutRow> _layoutRows(
   double maxWidth,
   ChordTransposer? transposer,
   bool showChords,
+  List<String> breakingCharacters,
 ) {
   final lyricStyle = style.lyricStyleFor(line);
   final scaler = style.textScaler;
-  final segments = wrapText(line.lyrics, lyricStyle, maxWidth, scaler);
+  final segments = wrapText(
+    line.lyrics,
+    lyricStyle,
+    maxWidth,
+    scaler,
+    breakingCharacters,
+  );
 
   int segmentFor(int charIndex) {
     for (var i = segments.length - 1; i > 0; i--) {
@@ -300,16 +314,32 @@ class TextSegment {
 
 final _tokens = RegExp(r'^\s+|\S+\s*');
 
+/// Splits text into pieces that may end a row: leading whitespace, then
+/// runs of text that end after whitespace or after any of [breaks].
+RegExp _tokensFor(List<String> breaks) {
+  final chars = breaks.where((c) => c.trim().isNotEmpty).toSet();
+  if (chars.isEmpty) return _tokens;
+  final alternatives = chars.map(RegExp.escape).join('|');
+  return RegExp('^\\s+|(?:(?!$alternatives)\\S)*(?:$alternatives)+\\s*'
+      '|(?:(?!$alternatives)\\S)+\\s*');
+}
+
 /// Greedily wraps [text] at whitespace so each segment fits [maxWidth].
 /// A single word wider than [maxWidth] is broken between characters
 /// (grapheme clusters, so Devanagari conjuncts stay whole). Character
 /// offsets map back exactly to [text], so chords land in the right
 /// segment. Whitespace at a break is dropped from the end of the segment.
+///
+/// [breakingCharacters] are extra places a line may break, for text that
+/// separates words with something other than whitespace (e.g. `-` or
+/// `/`). The break comes after the character, which stays at the end of
+/// the row. Whitespace always breaks.
 List<TextSegment> wrapText(
   String text,
   TextStyle style,
   double maxWidth, [
   TextScaler textScaler = TextScaler.noScaling,
+  List<String> breakingCharacters = const [],
 ]) {
   double width(String s) => measureTextWidth(s, style, textScaler: textScaler);
 
@@ -318,7 +348,7 @@ List<TextSegment> wrapText(
   }
 
   final pieces = <TextSegment>[];
-  for (final match in _tokens.allMatches(text)) {
+  for (final match in _tokensFor(breakingCharacters).allMatches(text)) {
     final token = match.group(0)!;
     if (width(token.trimRight()) <= maxWidth) {
       pieces.add(TextSegment(token, match.start));
