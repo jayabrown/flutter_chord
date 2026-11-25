@@ -1,3 +1,5 @@
+import 'dart:math';
+
 /// A chord attached to a lyric line at a character index.
 class ChordMark {
   /// Index into [LyricLine.lyrics] the chord sits over.
@@ -32,14 +34,31 @@ class LyricLine {
   /// Inside a `{soc}` … `{eoc}` chorus block.
   final bool isChorus;
 
+  /// Lines shown under this one, one per additional lyrics set (e.g. a
+  /// translation), with chord markup removed. An entry is empty when its set
+  /// has no line here.
+  final List<String> additional;
+
   const LyricLine(
     this.lyrics, {
     this.chords = const [],
     this.kind = LineKind.lyric,
     this.isChorus = false,
+    this.additional = const [],
   });
 
   bool get hasChords => chords.isNotEmpty;
+
+  /// True when there is any non-empty additional line.
+  bool get hasAdditional => additional.any((a) => a.isNotEmpty);
+
+  LyricLine _withAdditional(List<String> additional) => LyricLine(
+        lyrics,
+        chords: chords,
+        kind: kind,
+        isChorus: isChorus,
+        additional: additional,
+      );
 
   @override
   String toString() => 'LyricLine("$lyrics", $chords)';
@@ -96,28 +115,58 @@ final _comment = RegExp(r'^\{(comment|c):\s*(.*?)\s*\}$');
 /// Parses ChordPro-style text: `[X]` inline chords, blank lines between
 /// stanzas, `{title: }` / `{artist: }` / `{key: }` / `{capo: }` metadata,
 /// `{soc}` / `{eoc}` chorus markers and `{comment: }` lines.
-SongDocument parseSong(String text) {
+///
+/// Each of [additionalLyrics] is another text with the same line structure,
+/// such as a translation. Its line `n` is attached to the lyric or comment
+/// on line `n` of [text] (see [LyricLine.additional]), so it stays with
+/// that line however the line wraps. Additional lines next to blank or
+/// metadata lines are dropped. Lines past the end of [text] are kept in a
+/// final stanza.
+SongDocument parseSong(
+  String text, {
+  List<String> additionalLyrics = const [],
+}) {
   final stanzas = <Stanza>[];
   var current = <LyricLine>[];
   var isChorus = false;
   int? capo;
   String? title, artist, key;
 
+  final sourceLines = text.split('\n');
+  final additionalSets = [
+    for (final set in additionalLyrics) set.split('\n'),
+  ];
+
+  /// Additional lines for source line [index], with chords removed.
+  List<String> additionalAt(int index) => [
+        for (final set in additionalSets)
+          index < set.length ? parseLine(set[index].trim()).lyrics.trim() : '',
+      ];
+
+  void add(LyricLine line, int index) {
+    current.add(
+      additionalSets.isEmpty ? line : line._withAdditional(additionalAt(index)),
+    );
+  }
+
   void closeStanza() {
     if (current.isNotEmpty) stanzas.add(Stanza(current));
     current = [];
   }
 
-  for (final rawLine in text.split('\n')) {
-    var line = rawLine.trim();
+  for (var index = 0; index < sourceLines.length; index++) {
+    var line = sourceLines[index].trim();
 
     final comment = _comment.firstMatch(line);
     if (comment != null) {
-      current.add(LyricLine(
-        comment.group(2)!,
-        kind: LineKind.comment,
-        isChorus: isChorus,
-      ));
+      add(
+        LyricLine(
+          comment.group(2)!,
+          kind: LineKind.comment,
+          isChorus: isChorus,
+        ),
+        index,
+      );
       continue;
     }
 
@@ -154,8 +203,16 @@ SongDocument parseSong(String text) {
       continue;
     }
 
-    current.add(parseLine(line, isChorus: isChorus));
+    add(parseLine(line, isChorus: isChorus), index);
     if (endsChorus) isChorus = false;
+  }
+  closeStanza();
+
+  // Additional lines past the end of the main text.
+  final longest = additionalSets.fold<int>(0, (n, set) => max(n, set.length));
+  for (var index = sourceLines.length; index < longest; index++) {
+    final extra = const LyricLine('')._withAdditional(additionalAt(index));
+    if (extra.hasAdditional) current.add(extra);
   }
   closeStanza();
 
